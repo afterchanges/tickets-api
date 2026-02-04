@@ -1,9 +1,5 @@
-"""SQLAlchemy models package.
-
-Import models here so Alembic autogenerate can discover them via Base.metadata.
-"""
-
 from app.models.enums import TicketPriority, TicketStatus, UserRole
+from app.models.refresh_token import RefreshToken
 from app.models.ticket import Ticket
 from app.models.ticket_comment import TicketComment
 from app.models.ticket_event import TicketEvent
@@ -13,6 +9,7 @@ __all__ = [
 	"Ticket",
 	"TicketComment",
 	"TicketEvent",
+	"RefreshToken",
 	"User",
 	"TicketPriority",
 	"TicketStatus",

@@ -4,9 +4,7 @@ from enum import Enum
 
 
 class StrEnum(str, Enum):
-    """String-valued Enum suitable for JSON + SQLAlchemy."""
-
-    def __str__(self) -> str:  # pragma: no cover
+    def __str__(self) -> str:
         return str(self.value)
 
 

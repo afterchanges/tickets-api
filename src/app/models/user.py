@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from app.models.ticket import Ticket
     from app.models.ticket_comment import TicketComment
     from app.models.ticket_event import TicketEvent
+    from app.models.refresh_token import RefreshToken
 
 
 class User(Base):
@@ -55,4 +56,11 @@ class User(Base):
     ticket_comments: Mapped[list["TicketComment"]] = relationship(
         back_populates="author",
         lazy="selectin",
+    )
+
+    refresh_tokens: Mapped[list["RefreshToken"]] = relationship(
+        back_populates="user",
+        lazy="selectin",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
     )
