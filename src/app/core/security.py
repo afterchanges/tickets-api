@@ -4,26 +4,27 @@ import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
+from argon2 import PasswordHasher
+from argon2.exceptions import VerifyMismatchError
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 
 from app.core.settings import settings
 
 
 ALGORITHM = "HS256"
 
-pwd_context = CryptContext(
-    schemes=["argon2"],
-    deprecated="auto",
-)
+_ph = PasswordHasher()
 
 
 def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
+    return _ph.hash(password)
 
 
 def verify_password(password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(password, hashed_password)
+    try:
+        return _ph.verify(hashed_password, password)
+    except VerifyMismatchError:
+        return False
 
 
 @dataclass(frozen=True)
