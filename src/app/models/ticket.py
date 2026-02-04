@@ -17,6 +17,7 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -56,6 +57,12 @@ class Ticket(Base):
         SAEnum(TicketPriority, name="ticket_priority"),
         nullable=False,
         server_default=text("'MEDIUM'"),
+    )
+
+    tags: Mapped[list[str]] = mapped_column(
+        ARRAY(String(64)),
+        nullable=False,
+        server_default=text("'{}'::varchar[]"),
     )
 
     reporter_id: Mapped[uuid.UUID] = mapped_column(
