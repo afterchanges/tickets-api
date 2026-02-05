@@ -39,13 +39,26 @@ FastAPI-сервис для создания и управления тикет�
 
 ### 1.5. Опциональный сидинг ADMIN пользователя
 
-- При старте приложения можно создать начального ADMIN из переменных окружения.
+При старте приложения можно создать начальных пользователей из переменных окружения.
+
+ADMIN:
+
+- `SEED_ADMIN` — включить сидинг (`true/false`)
+- `SEED_ADMIN_UPDATE_EXISTING` — если пользователь уже есть, обновить пароль/роль (`true/false`)
+- `ADMIN_EMAIL` — email администратора
+- `ADMIN_PASSWORD` — пароль администратора (минимум 12 символов)
+
+AGENT:
+
+- `SEED_AGENT` — включить сидинг (`true/false`)
+- `AGENT_EMAIL` — email агента
+- `SEED_AGENT_UPDATE_EXISTING` — если пользователь уже есть, обновить пароль/роль (`true/false`)
+- `AGENT_PASSWORD` — пароль агента (минимум 12 символов)
 
 ---
 
-## 2) Технологический стек
+## 2) Технологии
 
-- Python 3.11
 - FastAPI + Uvicorn
 - PostgreSQL 16
 - SQLAlchemy 2.0 (async) + asyncpg
@@ -135,8 +148,16 @@ docker compose down -v
 ### 4.6. Сидинг администратора (опционально)
 
 - `SEED_ADMIN` — включить сидинг (`true/false`)
+- `SEED_ADMIN_UPDATE_EXISTING` — если пользователь уже есть, обновить пароль/роль (`true/false`)
 - `ADMIN_EMAIL` — email администратора
 - `ADMIN_PASSWORD` — пароль администратора (минимум 12 символов)
+
+Сидинг AGENT пользователя (опционально):
+
+- `SEED_AGENT` — включить сидинг (`true/false`)
+- `AGENT_EMAIL` — email агента
+- `SEED_AGENT_UPDATE_EXISTING` — если пользователь уже есть, обновить пароль/роль (`true/false`)
+- `AGENT_PASSWORD` — пароль агента (минимум 12 символов)
 
 ---
 

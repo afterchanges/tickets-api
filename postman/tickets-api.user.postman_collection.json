@@ -1,0 +1,328 @@
+{
+  "info": {
+    "_postman_id": "3a7a3a38-4b05-4b0e-8d35-0bb0b2f1c6f0",
+    "name": "tickets-api — USER (RBAC scenarios)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Ensure baseUrl exists even if someone forgot to import/select an environment.",
+          "function ensureVar(name, fallback) {",
+          "  const cur = pm.variables.get(name);",
+          "  if (!cur) pm.variables.set(name, fallback);",
+          "}",
+          "ensureVar('baseUrl', 'http://localhost:8000');",
+          "",
+          "// Generate two unique USER emails once per run.",
+          "function ensureEmail(key, prefix) {",
+          "  const cur = pm.variables.get(key);",
+          "  if (!cur) pm.variables.set(key, `${prefix}+${Date.now()}@example.com`);",
+          "}",
+          "ensureEmail('user1Email', 'user1');",
+          "ensureEmail('user2Email', 'user2');",
+          "",
+          "// Default headers.",
+          "pm.request.headers.upsert({ key: 'Accept', value: 'application/json' });",
+          "pm.request.headers.upsert({ key: 'X-Request-Id', value: pm.variables.replaceIn('{{$guid}}') });"
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "const rid = pm.response.headers.get('X-Request-Id');",
+          "if (rid) pm.environment.set('lastRequestId', rid);"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "GET /healthz",
+          "request": { "method": "GET", "url": "{{baseUrl}}/healthz", "auth": { "type": "noauth" } },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('status 200', () => pm.response.to.have.status(200));"] } }
+          ]
+        },
+        {
+          "name": "GET /readyz",
+          "request": { "method": "GET", "url": "{{baseUrl}}/readyz", "auth": { "type": "noauth" } },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('status 200', () => pm.response.to.have.status(200));",
+              "const j = pm.response.json();",
+              "pm.test('has checks', () => pm.expect(j).to.have.property('checks'));"
+            ] } }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Auth (User1/User2)",
+      "item": [
+        {
+          "name": "POST /v1/auth/register (User1)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/v1/auth/register",
+            "auth": { "type": "noauth" },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{user1Email}}\",\n  \"password\": \"{{userPassword}}\"\n}"
+            }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('status 200', () => pm.response.to.have.status(200));",
+              "const j = pm.response.json();",
+              "pm.test('role USER', () => pm.expect(j.role).to.eql('USER'));"
+            ] } }
+          ]
+        },
+        {
+          "name": "POST /v1/auth/login (User1)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/v1/auth/login",
+            "auth": { "type": "noauth" },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{user1Email}}\",\n  \"password\": \"{{userPassword}}\"\n}"
+            }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('status 200', () => pm.response.to.have.status(200));",
+              "const j = pm.response.json();",
+              "pm.environment.set('accessTokenUser1', j.access_token);",
+              "pm.environment.set('refreshTokenUser1', j.refresh_token);",
+              "pm.test('tokens present', () => { pm.expect(j.access_token).to.be.a('string'); pm.expect(j.refresh_token).to.be.a('string'); });"
+            ] } }
+          ]
+        },
+        {
+          "name": "POST /v1/auth/register (User2)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/v1/auth/register",
+            "auth": { "type": "noauth" },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{user2Email}}\",\n  \"password\": \"{{userPassword}}\"\n}"
+            }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('status 200', () => pm.response.to.have.status(200));",
+              "const j = pm.response.json();",
+              "pm.test('role USER', () => pm.expect(j.role).to.eql('USER'));"
+            ] } }
+          ]
+        },
+        {
+          "name": "POST /v1/auth/login (User2)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/v1/auth/login",
+            "auth": { "type": "noauth" },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{user2Email}}\",\n  \"password\": \"{{userPassword}}\"\n}"
+            }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('status 200', () => pm.response.to.have.status(200));",
+              "const j = pm.response.json();",
+              "pm.environment.set('accessTokenUser2', j.access_token);",
+              "pm.environment.set('refreshTokenUser2', j.refresh_token);",
+              "pm.test('tokens present', () => { pm.expect(j.access_token).to.be.a('string'); pm.expect(j.refresh_token).to.be.a('string'); });"
+            ] } }
+          ]
+        },
+        {
+          "name": "GET /v1/auth/me (no token -> 401)",
+          "request": { "method": "GET", "url": "{{baseUrl}}/v1/auth/me", "auth": { "type": "noauth" } },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('status 401', () => pm.response.to.have.status(401));",
+              "const j = pm.response.json();",
+              "pm.test('error.auth_required', () => pm.expect(j.error.code).to.eql('auth_required'));"
+            ] } }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Tickets (USER permissions)",
+      "item": [
+        {
+          "name": "POST /v1/tickets (User1)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/v1/tickets",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessTokenUser1}}", "type": "string" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"User1 ticket\",\n  \"description\": \"Created by user1\",\n  \"priority\": \"MEDIUM\",\n  \"tags\": [\"rbac\", \"user\"]\n}"
+            }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('status 201', () => pm.response.to.have.status(201));",
+              "const j = pm.response.json();",
+              "pm.environment.set('ticketIdUser1', j.id);",
+              "pm.test('has id', () => pm.expect(j.id).to.be.a('string'));"
+            ] } }
+          ]
+        },
+        {
+          "name": "POST /v1/tickets with assignee_id (User1 -> 403)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/v1/tickets",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessTokenUser1}}", "type": "string" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Should fail assign\",\n  \"description\": \"Users cannot assign\",\n  \"priority\": \"LOW\",\n  \"assignee_id\": \"00000000-0000-0000-0000-000000000000\",\n  \"tags\": []\n}"
+            }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('status 403', () => pm.response.to.have.status(403));",
+              "const j = pm.response.json();",
+              "pm.test('error.forbidden', () => pm.expect(j.error.code).to.eql('forbidden'));"
+            ] } }
+          ]
+        },
+        {
+          "name": "GET /v1/tickets (User1)",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/v1/tickets?limit=50&offset=0",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessTokenUser1}}", "type": "string" }] }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('status 200', () => pm.response.to.have.status(200));",
+              "const j = pm.response.json();",
+              "pm.test('has items/total', () => { pm.expect(j).to.have.property('items'); pm.expect(j).to.have.property('total'); });"
+            ] } }
+          ]
+        },
+        {
+          "name": "GET /v1/tickets/{id} (User1 own)",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/v1/tickets/{{ticketIdUser1}}",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessTokenUser1}}", "type": "string" }] }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('status 200', () => pm.response.to.have.status(200));",
+              "const j = pm.response.json();",
+              "pm.test('id matches', () => pm.expect(j.id).to.eql(pm.environment.get('ticketIdUser1')));"
+            ] } }
+          ]
+        },
+        {
+          "name": "POST /v1/tickets/{id}/transition (User1 -> 403)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/v1/tickets/{{ticketIdUser1}}/transition",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessTokenUser1}}", "type": "string" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"status\": \"IN_PROGRESS\"\n}" }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('status 403', () => pm.response.to.have.status(403));",
+              "const j = pm.response.json();",
+              "pm.test('error.forbidden', () => pm.expect(j.error.code).to.eql('forbidden'));"
+            ] } }
+          ]
+        },
+        {
+          "name": "GET /v1/tickets?include_deleted=true (User1 -> 403)",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/v1/tickets?include_deleted=true",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessTokenUser1}}", "type": "string" }] }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('status 403', () => pm.response.to.have.status(403));",
+              "const j = pm.response.json();",
+              "pm.test('error.forbidden', () => pm.expect(j.error.code).to.eql('forbidden'));"
+            ] } }
+          ]
+        },
+        {
+          "name": "POST /v1/tickets (User2)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/v1/tickets",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessTokenUser2}}", "type": "string" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"User2 ticket\",\n  \"description\": \"Created by user2\",\n  \"priority\": \"LOW\",\n  \"tags\": [\"rbac\", \"user2\"]\n}"
+            }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('status 201', () => pm.response.to.have.status(201));",
+              "const j = pm.response.json();",
+              "pm.environment.set('ticketIdUser2', j.id);"
+            ] } }
+          ]
+        },
+        {
+          "name": "GET /v1/tickets/{id} (User1 tries User2 ticket -> 404)",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/v1/tickets/{{ticketIdUser2}}",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessTokenUser1}}", "type": "string" }] }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('status 404', () => pm.response.to.have.status(404));",
+              "const j = pm.response.json();",
+              "pm.test('error.not_found', () => pm.expect(j.error.code).to.eql('not_found'));"
+            ] } }
+          ]
+        },
+        {
+          "name": "DELETE /v1/tickets/{id} (User1 tries delete User2 ticket -> 404)",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/v1/tickets/{{ticketIdUser2}}",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessTokenUser1}}", "type": "string" }] }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('status 404', () => pm.response.to.have.status(404));",
+              "const j = pm.response.json();",
+              "pm.test('error.not_found', () => pm.expect(j.error.code).to.eql('not_found'));"
+            ] } }
+          ]
+        }
+      ]
+    }
+  ]
+}

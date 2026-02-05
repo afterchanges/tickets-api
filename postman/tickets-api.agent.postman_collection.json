@@ -1,0 +1,226 @@
+{
+  "info": {
+    "_postman_id": "d392d2b3-70d7-44d0-88f5-1a7cc6c1bcbf",
+    "name": "tickets-api — AGENT (RBAC scenarios)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Ensure variables exist even if an Environment is not selected.",
+          "function ensureVar(name, fallback) {",
+          "  const cur = pm.variables.get(name);",
+          "  if (!cur) pm.variables.set(name, fallback);",
+          "}",
+          "ensureVar('baseUrl', 'http://localhost:8000');",
+          "ensureVar('agentEmail', 'agent@example.com');",
+          "ensureVar('agentPassword', 'change_me_please_very_long');",
+          "",
+          "// Generate a temp USER email for cross-user access tests.",
+          "ensureVar('tempUserEmail', `tempuser+${Date.now()}@example.com`);",
+          "",
+          "pm.request.headers.upsert({ key: 'Accept', value: 'application/json' });",
+          "pm.request.headers.upsert({ key: 'X-Request-Id', value: pm.variables.replaceIn('{{$guid}}') });"
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "const rid = pm.response.headers.get('X-Request-Id');",
+          "if (rid) pm.environment.set('lastRequestId', rid);"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "Auth (Agent)",
+      "item": [
+        {
+          "name": "POST /v1/auth/login (AGENT)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/v1/auth/login",
+            "auth": { "type": "noauth" },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{agentEmail}}\",\n  \"password\": \"{{agentPassword}}\"\n}"
+            }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('status 200', () => pm.response.to.have.status(200));",
+              "const j = pm.response.json();",
+              "pm.environment.set('accessTokenAgent', j.access_token);",
+              "pm.environment.set('refreshTokenAgent', j.refresh_token);",
+              "pm.test('tokens present', () => { pm.expect(j.access_token).to.be.a('string'); pm.expect(j.refresh_token).to.be.a('string'); });"
+            ] } }
+          ]
+        },
+        {
+          "name": "GET /v1/auth/me (AGENT)",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/v1/auth/me",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessTokenAgent}}", "type": "string" }] }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('status 200', () => pm.response.to.have.status(200));",
+              "const j = pm.response.json();",
+              "pm.environment.set('agentId', j.id);",
+              "pm.test('role AGENT', () => pm.expect(j.role).to.eql('AGENT'));"
+            ] } }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Setup temp USER",
+      "item": [
+        {
+          "name": "POST /v1/auth/register (temp USER)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/v1/auth/register",
+            "auth": { "type": "noauth" },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{tempUserEmail}}\",\n  \"password\": \"{{tempUserPassword}}\"\n}" }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('status 200', () => pm.response.to.have.status(200));"
+            ] } }
+          ]
+        },
+        {
+          "name": "POST /v1/auth/login (temp USER)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/v1/auth/login",
+            "auth": { "type": "noauth" },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{tempUserEmail}}\",\n  \"password\": \"{{tempUserPassword}}\"\n}" }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('status 200', () => pm.response.to.have.status(200));",
+              "const j = pm.response.json();",
+              "pm.environment.set('accessTokenTempUser', j.access_token);"
+            ] } }
+          ]
+        },
+        {
+          "name": "POST /v1/tickets (temp USER)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/v1/tickets",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessTokenTempUser}}", "type": "string" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"Temp user ticket\",\n  \"description\": \"Created for agent access tests\",\n  \"priority\": \"MEDIUM\",\n  \"tags\": [\"rbac\", \"temp\"]\n}" }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('status 201', () => pm.response.to.have.status(201));",
+              "const j = pm.response.json();",
+              "pm.environment.set('ticketIdTempUser', j.id);"
+            ] } }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Tickets (AGENT permissions)",
+      "item": [
+        {
+          "name": "GET /v1/tickets/{id} (AGENT can access other user's ticket)",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/v1/tickets/{{ticketIdTempUser}}",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessTokenAgent}}", "type": "string" }] }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('status 200', () => pm.response.to.have.status(200));",
+              "const j = pm.response.json();",
+              "pm.test('id matches', () => pm.expect(j.id).to.eql(pm.environment.get('ticketIdTempUser')));"
+            ] } }
+          ]
+        },
+        {
+          "name": "POST /v1/tickets/{id}/transition (AGENT -> 200)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/v1/tickets/{{ticketIdTempUser}}/transition",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessTokenAgent}}", "type": "string" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"status\": \"IN_PROGRESS\"\n}" }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('status 200', () => pm.response.to.have.status(200));",
+              "const j = pm.response.json();",
+              "pm.test('status changed', () => pm.expect(j.status).to.eql('IN_PROGRESS'));"
+            ] } }
+          ]
+        },
+        {
+          "name": "PATCH /v1/tickets/{id} (AGENT assigns to self -> 200)",
+          "request": {
+            "method": "PATCH",
+            "url": "{{baseUrl}}/v1/tickets/{{ticketIdTempUser}}",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessTokenAgent}}", "type": "string" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"assignee_id\": \"{{agentId}}\"\n}" }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('status 200', () => pm.response.to.have.status(200));",
+              "const j = pm.response.json();",
+              "pm.test('assignee_id set', () => pm.expect(j.assignee_id).to.eql(pm.environment.get('agentId')));"
+            ] } }
+          ]
+        },
+        {
+          "name": "GET /v1/tickets?include_deleted=true (AGENT -> 403)",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/v1/tickets?include_deleted=true",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessTokenAgent}}", "type": "string" }] }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('status 403', () => pm.response.to.have.status(403));",
+              "const j = pm.response.json();",
+              "pm.test('error.forbidden', () => pm.expect(j.error.code).to.eql('forbidden'));"
+            ] } }
+          ]
+        },
+        {
+          "name": "POST /v1/tickets/{id}/transition (temp USER -> 403)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/v1/tickets/{{ticketIdTempUser}}/transition",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessTokenTempUser}}", "type": "string" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"status\": \"DONE\"\n}" }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('status 403', () => pm.response.to.have.status(403));",
+              "const j = pm.response.json();",
+              "pm.test('error.forbidden', () => pm.expect(j.error.code).to.eql('forbidden'));"
+            ] } }
+          ]
+        }
+      ]
+    }
+  ]
+}

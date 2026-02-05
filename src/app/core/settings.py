@@ -25,8 +25,14 @@ class Settings(BaseSettings):
     rate_limit_register_per_ip: int = Field(default=10, alias="RATE_LIMIT_REGISTER_PER_IP")
 
     seed_admin: bool = Field(default=False, alias="SEED_ADMIN")
+    seed_admin_update_existing: bool = Field(default=False, alias="SEED_ADMIN_UPDATE_EXISTING")
     admin_email: str | None = Field(default=None, alias="ADMIN_EMAIL")
     admin_password: str | None = Field(default=None, alias="ADMIN_PASSWORD")
+
+    seed_agent: bool = Field(default=False, alias="SEED_AGENT")
+    seed_agent_update_existing: bool = Field(default=False, alias="SEED_AGENT_UPDATE_EXISTING")
+    agent_email: str | None = Field(default=None, alias="AGENT_EMAIL")
+    agent_password: str | None = Field(default=None, alias="AGENT_PASSWORD")
 
 
 settings = Settings()

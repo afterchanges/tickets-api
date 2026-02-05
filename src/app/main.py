@@ -10,6 +10,7 @@ from fastapi.responses import ORJSONResponse
 from prometheus_client import Counter, Histogram, make_asgi_app
 from redis.exceptions import RedisError
 from sqlalchemy import select, text
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
@@ -76,38 +77,78 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 		return response
 
 
-async def _seed_admin() -> None:
-	if not settings.seed_admin:
+async def _seed_user(
+	*,
+	label: str,
+	enabled: bool,
+	update_existing: bool,
+	email: str | None,
+	password: str | None,
+	role: UserRole,
+) -> None:
+	if not enabled:
 		return
-	if not settings.admin_email or not settings.admin_password:
-		logger.warning("seed_admin_missing_credentials")
+	if not email or not password:
+		logger.warning("seed_user_missing_credentials", label=label)
 		return
 
-	email = settings.admin_email.strip().lower()
-	password = settings.admin_password
+	normalized_email = email.strip().lower()
 	if len(password) < 12:
-		logger.warning("seed_admin_password_too_short", email=email)
+		logger.warning("seed_user_password_too_short", label=label, email=normalized_email)
 		return
 
 	async with SessionLocal() as db:
-		existing = await db.scalar(select(User).where(User.email == email))
-		if existing is not None:
-			logger.info("seed_admin_exists", email=email)
+		try:
+			res = await db.execute(text("SELECT to_regclass('public.users')"))
+			table = res.scalar_one_or_none()
+			if table is None:
+				logger.warning("seed_user_table_missing", label=label, table="users")
+				return
+		except SQLAlchemyError:
+			logger.exception("seed_user_db_error", label=label)
 			return
-		admin = User(
-			email=email,
+
+		existing = await db.scalar(select(User).where(User.email == normalized_email))
+		if existing is not None:
+			if not update_existing:
+				logger.info("seed_user_exists", label=label, email=normalized_email)
+				return
+
+			existing.hashed_password = hash_password(password)
+			existing.role = role
+			existing.is_active = True
+			await db.commit()
+			logger.info("seed_user_updated", label=label, email=normalized_email, role=str(role))
+			return
+		user = User(
+			email=normalized_email,
 			hashed_password=hash_password(password),
-			role=UserRole.ADMIN,
+			role=role,
 			is_active=True,
 		)
-		db.add(admin)
+		db.add(user)
 		await db.commit()
-		logger.info("seed_admin_created", email=email)
+		logger.info("seed_user_created", label=label, email=normalized_email, role=str(role))
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-	await _seed_admin()
+	await _seed_user(
+		label="admin",
+		enabled=settings.seed_admin,
+		update_existing=settings.seed_admin_update_existing,
+		email=settings.admin_email,
+		password=settings.admin_password,
+		role=UserRole.ADMIN,
+	)
+	await _seed_user(
+		label="agent",
+		enabled=settings.seed_agent,
+		update_existing=settings.seed_agent_update_existing,
+		email=settings.agent_email,
+		password=settings.agent_password,
+		role=UserRole.AGENT,
+	)
 	yield
 
 

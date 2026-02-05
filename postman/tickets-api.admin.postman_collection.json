@@ -1,0 +1,165 @@
+{
+  "info": {
+    "_postman_id": "edc40c2d-7c8a-476c-94f2-083a3ad1ea4e",
+    "name": "tickets-api — ADMIN (RBAC scenarios)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Ensure variables exist even if an Environment is not selected.",
+          "function ensureVar(name, fallback) {",
+          "  const cur = pm.variables.get(name);",
+          "  if (!cur) pm.variables.set(name, fallback);",
+          "}",
+          "ensureVar('baseUrl', 'http://localhost:8000');",
+          "ensureVar('adminEmail', 'admin@example.com');",
+          "ensureVar('adminPassword', 'change_me_please_very_long');",
+          "pm.request.headers.upsert({ key: 'Accept', value: 'application/json' });",
+          "pm.request.headers.upsert({ key: 'X-Request-Id', value: pm.variables.replaceIn('{{$guid}}') });"
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "const rid = pm.response.headers.get('X-Request-Id');",
+          "if (rid) pm.environment.set('lastRequestId', rid);"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "Auth (Admin)",
+      "item": [
+        {
+          "name": "POST /v1/auth/login (ADMIN)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/v1/auth/login",
+            "auth": { "type": "noauth" },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\"\n}" }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('status 200', () => pm.response.to.have.status(200));",
+              "const j = pm.response.json();",
+              "pm.environment.set('accessTokenAdmin', j.access_token);",
+              "pm.environment.set('refreshTokenAdmin', j.refresh_token);"
+            ] } }
+          ]
+        },
+        {
+          "name": "GET /v1/auth/me (ADMIN)",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/v1/auth/me",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessTokenAdmin}}", "type": "string" }] }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('status 200', () => pm.response.to.have.status(200));",
+              "const j = pm.response.json();",
+              "pm.environment.set('adminId', j.id);",
+              "pm.test('role ADMIN', () => pm.expect(j.role).to.eql('ADMIN'));"
+            ] } }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Tickets (ADMIN permissions)",
+      "item": [
+        {
+          "name": "POST /v1/tickets (ADMIN creates ticket)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/v1/tickets",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessTokenAdmin}}", "type": "string" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"Admin ticket\",\n  \"description\": \"Created by admin\",\n  \"priority\": \"HIGH\",\n  \"assignee_id\": \"{{adminId}}\",\n  \"tags\": [\"rbac\", \"admin\"]\n}" }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('status 201', () => pm.response.to.have.status(201));",
+              "const j = pm.response.json();",
+              "pm.environment.set('ticketIdAdmin', j.id);",
+              "pm.test('assignee_id set', () => pm.expect(j.assignee_id).to.eql(pm.environment.get('adminId')));"
+            ] } }
+          ]
+        },
+        {
+          "name": "POST /v1/tickets/{id}/transition (ADMIN -> 200)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/v1/tickets/{{ticketIdAdmin}}/transition",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessTokenAdmin}}", "type": "string" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"status\": \"IN_PROGRESS\"\n}" }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('status 200', () => pm.response.to.have.status(200));",
+              "const j = pm.response.json();",
+              "pm.test('status changed', () => pm.expect(j.status).to.eql('IN_PROGRESS'));"
+            ] } }
+          ]
+        },
+        {
+          "name": "DELETE /v1/tickets/{id} (ADMIN soft delete)",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/v1/tickets/{{ticketIdAdmin}}",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessTokenAdmin}}", "type": "string" }] }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('status 200', () => pm.response.to.have.status(200));",
+              "const j = pm.response.json();",
+              "pm.test('ok true', () => pm.expect(j.ok).to.eql(true));"
+            ] } }
+          ]
+        },
+        {
+          "name": "GET /v1/tickets?include_deleted=true (ADMIN -> 200)",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/v1/tickets?include_deleted=true&limit=50&offset=0",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessTokenAdmin}}", "type": "string" }] }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('status 200', () => pm.response.to.have.status(200));",
+              "const j = pm.response.json();",
+              "const id = pm.environment.get('ticketIdAdmin');",
+              "const found = (j.items || []).some(x => x.id === id);",
+              "pm.test('contains deleted ticket', () => pm.expect(found).to.eql(true));"
+            ] } }
+          ]
+        },
+        {
+          "name": "GET /v1/tickets/{id}?include_deleted=true (ADMIN -> 200)",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/v1/tickets/{{ticketIdAdmin}}?include_deleted=true",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessTokenAdmin}}", "type": "string" }] }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('status 200', () => pm.response.to.have.status(200));",
+              "const j = pm.response.json();",
+              "pm.test('is_deleted true', () => pm.expect(j.is_deleted).to.eql(true));"
+            ] } }
+          ]
+        }
+      ]
+    }
+  ]
+}
