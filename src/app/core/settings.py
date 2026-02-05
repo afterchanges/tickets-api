@@ -18,5 +18,15 @@ class Settings(BaseSettings):
 
     cors_origins: List[str] = Field(default_factory=list, alias="CORS_ORIGINS")
 
+    rate_limit_enabled: bool = Field(default=True, alias="RATE_LIMIT_ENABLED")
+    rate_limit_window_sec: int = Field(default=60, alias="RATE_LIMIT_WINDOW_SEC")
+    rate_limit_login_per_ip: int = Field(default=20, alias="RATE_LIMIT_LOGIN_PER_IP")
+    rate_limit_login_per_email: int = Field(default=10, alias="RATE_LIMIT_LOGIN_PER_EMAIL")
+    rate_limit_register_per_ip: int = Field(default=10, alias="RATE_LIMIT_REGISTER_PER_IP")
+
+    seed_admin: bool = Field(default=False, alias="SEED_ADMIN")
+    admin_email: str | None = Field(default=None, alias="ADMIN_EMAIL")
+    admin_password: str | None = Field(default=None, alias="ADMIN_PASSWORD")
+
 
 settings = Settings()

@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_user
+from app.core.rate_limit import hit
 from app.db.session import get_db
 from app.schemas.auth import (
     LoginRequest,
@@ -30,7 +31,23 @@ def _err(code: str, message: str, http_status: int) -> HTTPException:
 
 
 @router.post("/register", response_model=MeResponse)
-async def register(payload: RegisterRequest, db: AsyncSession = Depends(get_db)):
+async def register(payload: RegisterRequest, request: Request, db: AsyncSession = Depends(get_db)):
+    from app.core.settings import settings
+
+    if settings.rate_limit_enabled:
+        ip = request.headers.get("x-forwarded-for") or (request.client.host if request.client else "unknown")
+        allowed, retry_after = await hit(
+            key=f"rl:register:ip:{ip}",
+            limit=settings.rate_limit_register_per_ip,
+            window_sec=settings.rate_limit_window_sec,
+        )
+        if not allowed:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail={"code": "rate_limited", "message": "Too many requests"},
+                headers={"Retry-After": str(retry_after)},
+            )
+
     try:
         user = await register_user(db, email=str(payload.email), password=payload.password)
     except ValueError as exc:
@@ -48,7 +65,37 @@ async def register(payload: RegisterRequest, db: AsyncSession = Depends(get_db))
 
 
 @router.post("/login", response_model=TokenPairResponse)
-async def login(payload: LoginRequest, db: AsyncSession = Depends(get_db)):
+async def login(payload: LoginRequest, request: Request, db: AsyncSession = Depends(get_db)):
+    from app.core.settings import settings
+
+    if settings.rate_limit_enabled:
+        ip = request.headers.get("x-forwarded-for") or (request.client.host if request.client else "unknown")
+        email = str(payload.email).lower()
+
+        allowed, retry_after = await hit(
+            key=f"rl:login:ip:{ip}",
+            limit=settings.rate_limit_login_per_ip,
+            window_sec=settings.rate_limit_window_sec,
+        )
+        if not allowed:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail={"code": "rate_limited", "message": "Too many requests"},
+                headers={"Retry-After": str(retry_after)},
+            )
+
+        allowed, retry_after = await hit(
+            key=f"rl:login:email:{email}",
+            limit=settings.rate_limit_login_per_email,
+            window_sec=settings.rate_limit_window_sec,
+        )
+        if not allowed:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail={"code": "rate_limited", "message": "Too many requests"},
+                headers={"Retry-After": str(retry_after)},
+            )
+
     user = await authenticate_user(db, email=str(payload.email), password=payload.password)
     if user is None:
         raise _err("invalid_credentials", "Invalid email or password", status.HTTP_401_UNAUTHORIZED)

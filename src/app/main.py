@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import Depends, FastAPI
@@ -8,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import ORJSONResponse
 from prometheus_client import Counter, Histogram, make_asgi_app
 from redis.exceptions import RedisError
-from sqlalchemy import text
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
@@ -21,8 +22,12 @@ from app.api.routers.tickets import router as tickets_router
 from app.core.logging import configure_logging, get_logger
 from app.core.redis import redis_client
 from app.core.settings import settings
+from app.core.security import hash_password
 from app.db.session import get_db
+from app.db.session import SessionLocal
 from app.middlewares.request_id import RequestIdMiddleware
+from app.models.enums import UserRole
+from app.models.user import User
 
 
 configure_logging(log_level=settings.log_level)
@@ -71,11 +76,46 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 		return response
 
 
-app = FastAPI(title="Tickets API", version="0.1.0")
+async def _seed_admin() -> None:
+	if not settings.seed_admin:
+		return
+	if not settings.admin_email or not settings.admin_password:
+		logger.warning("seed_admin_missing_credentials")
+		return
 
-app.add_middleware(RequestIdMiddleware)
-app.add_middleware(SecurityHeadersMiddleware)
+	email = settings.admin_email.strip().lower()
+	password = settings.admin_password
+	if len(password) < 12:
+		logger.warning("seed_admin_password_too_short", email=email)
+		return
+
+	async with SessionLocal() as db:
+		existing = await db.scalar(select(User).where(User.email == email))
+		if existing is not None:
+			logger.info("seed_admin_exists", email=email)
+			return
+		admin = User(
+			email=email,
+			hashed_password=hash_password(password),
+			role=UserRole.ADMIN,
+			is_active=True,
+		)
+		db.add(admin)
+		await db.commit()
+		logger.info("seed_admin_created", email=email)
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+	await _seed_admin()
+	yield
+
+
+app = FastAPI(title="Tickets API", version="0.1.0", lifespan=lifespan)
+
 app.add_middleware(MetricsMiddleware)
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(RequestIdMiddleware)
 
 if settings.cors_origins:
 	app.add_middleware(

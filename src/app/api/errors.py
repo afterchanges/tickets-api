@@ -51,6 +51,7 @@ def install_exception_handlers(app: FastAPI) -> None:
         return ORJSONResponse(
             status_code=int(exc.status_code),
             content=_error_payload(request_id=rid, code=code, message=message, details=details),
+            headers=exc.headers,
         )
 
     @app.exception_handler(RequestValidationError)
